@@ -36,17 +36,28 @@ bun add @adaptive-ds/bun-pages @adaptive-ds/result valibot
 ## Usage
 
 ```ts
-// src/server/origin/originServer.ts
+// src/server/origin/originApp.ts
 import { bunPagesCreate } from "@adaptive-ds/bun-pages/bunPagesCreate"
 import { bunPagesStart } from "@adaptive-ds/bun-pages/bunPagesStart"
 import server from "../../../dist/server/server.js"
 
-const app = bunPagesCreate({
-  buildSha: process.env.BUILD_SHA,
+export const originApp = bunPagesCreate({
+  clientRoot: "dist/client",
   ssrFetch: (request) => server.fetch(request, { context: { convexUrl: process.env.CONVEX_URL } }),
+  buildSha: process.env.BUILD_SHA,
+  canonicalHost: "example.de", // other hosts get X-Robots-Tag: noindex
+  hostRedirects: { "www.example.de": "example.de" }, // 301, keeps path + query
+  redirectRules, // TS, ex-_redirects / legacy paths
+  headerRules, // TS, ex-_headers
+  staticFirst: ["/.well-known/*"], // served before SSR when present
+  routes: (app) => {
+    // project endpoints (ex-Pages Functions)
+    app.get("/login/authworks/callback", authworksCallback)
+  },
 })
 
-const started = bunPagesStart(app) // HOST / PORT env, default 127.0.0.1:3000, drains on SIGTERM
+// entry: bunPagesStart(originApp) → Bun.serve, HOST/PORT env, SIGTERM drain
+const started = bunPagesStart(originApp)
 if (!started.success) {
   console.error(started.errorMessage, started.errorData)
   process.exit(1)
@@ -60,28 +71,73 @@ curl http://127.0.0.1:3000/__origin/health
 
 Fallible functions return a [`Result`](https://github.com/david1gp/result) instead of throwing.
 
+## Request pipeline
+
+`health → host redirects → redirect rules → project routes → staticFirst static → SSR → static fallback on SSR 404 → 404.html`. Header rules and `X-Robots-Tag: noindex` (on non-canonical hosts) wrap every response, including redirects and 404s. Responses are cloned before headers are set, so immutable headers and `set-cookie` survive.
+
+Without `ssrFetch` the app runs in static-only mode: static files, then `404.html` (status 404), then the optional `spaFallback` (e.g. `/spa.html`, status 200), then a plain-text 404.
+
+Every downstream handler sees the request rebuilt on its public `https://<Host>` origin (the tunnel delivers plain http to 127.0.0.1); method, headers (including `CF-Connecting-IP`) and body are kept.
+
+## Static files and clean URLs
+
+Static serving is traversal-safe (percent-encoded `..` included) and answers `GET`/`HEAD` only. Clean URLs follow Cloudflare Pages for the files our builds emit:
+
+| request | result |
+|---|---|
+| `/a` | serves `a.html` (or `a/index.html`) |
+| `/a.html` | `308` to `/a` |
+| `/a/index.html` | `308` to `/a/` |
+| `/dir` (only `dir/index.html` exists) | `308` to `/dir/` |
+| `/dir/` | serves `dir/index.html` |
+
+Query strings are preserved on `308` redirects. There is no ETag/`304` handling; Cloudflare edge caching covers that.
+
 ## API
 
 | export | description |
 |---|---|
 | `bunPagesCreate(config)` | Builds the Hono app for a `BunPagesConfig` |
-| `bunPagesStart(app)` | `Bun.serve` on `HOST`/`PORT`, graceful stop on SIGTERM, returns `Result<Server>` |
-| `BunPagesConfig` | `{ ssrFetch, buildSha? }` |
+| `bunPagesStart(app)` | `Bun.serve` on `HOST`/`PORT`, logs the address, drains on SIGTERM, returns `Result<Server>` |
+| `BunPagesConfig` | `{ clientRoot, ssrFetch?, buildSha?, canonicalHost?, hostRedirects?, redirectRules?, headerRules?, staticFirst?, routes?, spaFallback? }` |
+| `HttpRedirectRule` | `{ from, to, status?, host? }`; `from` exact or trailing `/*` splat, `to` may contain `:splat`, absolute targets allowed, query preserved |
+| `HttpHeaderRule` | `{ path, headers }`; `path` exact or with `*` wildcards like Pages `_headers` |
+| `headersFileRender(rules)` | Renders rules to Pages `_headers` text (transition/rollback target) |
+| `redirectsFileRender(rules)` | Renders rules to Pages `_redirects` text (host restrictions are dropped) |
+| `headerRuleMatches(pattern, pathname)` | Pages-style `*` path matching |
+| `redirectRuleTargetResolve(rule, hostname, pathname)` | First-match redirect target with `:splat` substituted, or `null` |
+| `redirectRulesRegister(app, rules)` | Registers ordered redirect rules (first match wins) |
+| `headerRulesMiddleware(rules)` | Applies all matching header rules to every response, later rules win |
+| `hostRedirectMiddleware(hostRedirects)` | `www` → apex 301 to `https://<to>` + path + query |
+| `noindexMiddleware(canonicalHost)` | `X-Robots-Tag: noindex` on non-canonical hosts, status/body/cookies kept |
+| `requestPublicCreate(request)` | Rebuilds the request on `https://<Host>` |
+| `cleanUrlRewrite(pathname, fileExists)` | Pure clean-URL mapping (`serve` / `redirect` / `none`) |
+| `CleanUrlResult` | Outcome of `cleanUrlRewrite` |
+| `staticPathResolve(clientRoot, subpath)` | Traversal-safe path resolution, `null` on escape |
+| `staticResponseCreate(clientRoot, pathname, search, method)` | Static file or `308` response, `null` on miss |
+| `staticFirstMatches(patterns, pathname)` | Whether a path is served before SSR |
+| `notFoundResponseCreate(clientRoot, spaFallback?)` | `404.html` → SPA fallback → plain-text 404 |
+| `responseHeadersApply(response, headers)` | Header-setting response clone preserving `set-cookie` |
+| `originBundleBuild({ entry, outFile, minify? })` | `Bun.build` origin bundle (`target: "bun"`), returns `Result<outFile>` |
+| `OriginBundleOptions` | Bundle input options |
+| `originParityCheck({ baseUrlA, baseUrlB, paths, sitemapUrl? })` | Diffs status, `Location`, cache/robots/content headers and non-HTML body sha256; returns `Result<diffs>` |
+| `OriginParityCheckOptions` | Parity input options |
+| `OriginParityDiff` | `{ path, field, a, b }` |
+| `originParityCheckCli(argv)` | CLI: `--a --b --paths-file [--sitemap]`; runnable via `bun` |
 | `healthRoutePath` | `/__origin/health`, used for deploy health checks (`Cache-Control: no-store`) |
 | `healthRouteRegister(app, buildSha)` | Adds the health route to an existing Hono app |
 
 ## Roadmap
 
-`bun-pages` is early. Health and SSR work today. Next up:
-
-- [ ] Host rules: `www` → apex 301, `X-Robots-Tag: noindex` on non-canonical hosts
-- [ ] Typed redirect rules (replace `_redirects`)
-- [ ] Typed header rules applied to static and SSR responses, plus a `_headers` renderer
-- [ ] Static files via `hono/bun` `serveStatic` with clean URLs and `staticFirst` patterns
-- [ ] Rebuild the request on its public `https://<Host>` origin and keep `CF-Connecting-IP`
-- [ ] `404.html` fallback and path traversal protection
-- [ ] `Bun.build` origin bundle (`dist/origin/server.js`, no `node_modules` on the server)
-- [ ] `originParityCheck` crawler that diffs two hosts (Pages vs. origin)
+- [x] Host rules: `www` → apex 301, `X-Robots-Tag: noindex` on non-canonical hosts
+- [x] Typed redirect rules (replace `_redirects`)
+- [x] Typed header rules applied to static and SSR responses, plus a `_headers` renderer
+- [x] Static files with clean URLs and `staticFirst` patterns
+- [x] Rebuild the request on its public `https://<Host>` origin and keep `CF-Connecting-IP`
+- [x] `404.html` fallback and path traversal protection
+- [x] `Bun.build` origin bundle (`dist/origin/server.js`, no `node_modules` on the server)
+- [x] `originParityCheck` crawler that diffs two hosts (Pages vs. origin)
+- [ ] Per-project adoption: header/redirect table tests, parity runs against `next.*` hosts
 
 ## Development
 
