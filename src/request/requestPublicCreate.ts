@@ -5,12 +5,13 @@ export function requestPublicCreate(request: Request): Request {
   const url = new URL(request.url)
   const publicUrl = new URL(`${url.pathname}${url.search}`, `https://${host}`).href
   if (request.method === "GET" || request.method === "HEAD") {
-    return new Request(publicUrl, { method: request.method, headers: request.headers })
+    return new Request(publicUrl, { method: request.method, headers: request.headers, signal: request.signal })
   }
   return new Request(publicUrl, {
     method: request.method,
     headers: request.headers,
     body: request.body,
+    signal: request.signal,
     duplex: "half",
   } as RequestInit)
 }
