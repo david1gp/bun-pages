@@ -17,9 +17,10 @@ export function bunPagesStart(app: Hono): Result<Server<undefined>> {
     server = Bun.serve({ hostname, port, fetch: app.fetch })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    return createResultError(op, `failed to start server: ${msg}`, `${hostname}:${port}`)
+    return createResultError(op, `failed to start server: ${msg}`, `${hostname}:${portText}`)
   }
 
+  console.log(`[bun-pages] listening on http://${hostname}:${server.port}`)
   process.once("SIGTERM", () => {
     void server.stop().then(() => process.exit(0))
   })
