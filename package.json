@@ -1,0 +1,87 @@
+{
+  "name": "@adaptive-ds/bun-pages",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "bun test --watch",
+    "build": "rm -rf ./dist && bun tsc -p ./tsconfig.lib.json",
+    "test": "bun test",
+    "test:w": "bun test --watch",
+    "typecheck": "bun tsc -p ./tsconfig.json",
+    "deploy": "bash ./ops/deploy.sh",
+    "release": "bash ./ops/release.sh",
+    "update": "bun update",
+    "update:commit": "bun update && git add package.json && bun run typecheck && git commit -m \"chore(deps): update dependencies\" && git push",
+    "clean": "rm -rf ./dist",
+    "reset": "rm -rf ./node_modules",
+    "format": "biome format --write src package.json tsconfig.json tsconfig.lib.json biome.json",
+    "format:check": "biome format src package.json tsconfig.json tsconfig.lib.json biome.json"
+  },
+  "dependencies": {
+    "hono": "^4.13.19"
+  },
+  "peerDependencies": {
+    "@adaptive-ds/result": "^0.6.0",
+    "valibot": "^1.2.0"
+  },
+  "devDependencies": {
+    "@adaptive-ds/result": "^0.6.0",
+    "@biomejs/biome": "^2.6.4",
+    "@types/bun": "^1.3.13",
+    "typescript": "^6.0.3",
+    "valibot": "^1.2.0"
+  },
+  "prettier": {
+    "semi": false,
+    "printWidth": 120,
+    "trailingComma": "all"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "private": false,
+  "license": "MIT",
+  "description": "Serve SSR web apps from your own Bun origin behind Cloudflare: host rules, redirects, header rules, clean-URL static files and SSR in one Hono app.",
+  "keywords": [
+    "bun",
+    "hono",
+    "ssr",
+    "origin",
+    "cloudflare",
+    "cloudflare-pages",
+    "cloudflare-tunnel",
+    "static-site",
+    "tanstack-start",
+    "web-server",
+    "typescript",
+    "adaptive-ds"
+  ],
+  "homepage": "https://github.com/david1gp/bun-pages#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/david1gp/bun-pages.git"
+  },
+  "bugs": {
+    "url": "https://github.com/david1gp/bun-pages/issues"
+  },
+  "author": "David Siewert",
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
+  "imports": {
+    "#result": "@adaptive-ds/result"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist"
+  ]
+}
