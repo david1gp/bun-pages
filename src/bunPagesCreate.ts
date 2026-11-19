@@ -25,8 +25,9 @@ export function bunPagesCreate(config: BunPagesConfig): Hono {
   app.fetch = ((request: Request, env?: unknown, executionCtx?: unknown) =>
     honoFetch(requestPublicCreate(request), env as never, executionCtx as never)) as typeof app.fetch
 
-  app.use(headerRulesMiddleware(config.headerRules ?? []))
+  // Outer middleware post-processes last: noindex must override header rules on non-canonical hosts.
   app.use(noindexMiddleware(config.canonicalHost))
+  app.use(headerRulesMiddleware(config.headerRules ?? []))
   healthRouteRegister(app, config.buildSha ?? "unknown")
   if (config.hostRedirects !== undefined && Object.keys(config.hostRedirects).length > 0) {
     app.use(hostRedirectMiddleware(config.hostRedirects))

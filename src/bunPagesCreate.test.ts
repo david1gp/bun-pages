@@ -135,6 +135,17 @@ describe("bunPagesCreate", () => {
     expect(await notFound.text()).toBe("missing")
   })
 
+  test("header rules override headers set by ssr", async () => {
+    const app = bunPagesCreate({
+      clientRoot: clientRootCreate({}),
+      headerRules: [{ path: "/*", headers: { "Cache-Control": "public, max-age=0, must-revalidate" } }],
+      ssrFetch: () => new Response("page", { headers: { "Cache-Control": "private", "X-Ssr": "kept" } }),
+    })
+    const response = await app.request("https://example.de/page")
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=0, must-revalidate")
+    expect(response.headers.get("X-Ssr")).toBe("kept")
+  })
+
   test("later header rules win and noindex wins on non-canonical hosts", async () => {
     const app = bunPagesCreate({
       clientRoot: clientRootCreate({}),

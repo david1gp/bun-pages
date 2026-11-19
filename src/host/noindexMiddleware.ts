@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from "hono"
+import { contextResponseReplace } from "../response/contextResponseReplace.js"
 import { responseHeadersApply } from "../rules/responseHeadersApply.js"
 
 /** Tags responses on non-canonical hosts with `X-Robots-Tag: noindex`, keeping status, body and cookies untouched. */
@@ -13,6 +14,6 @@ export function noindexMiddleware(canonicalHost: string | readonly string[] | un
     const bare = host.split(":")[0] ?? host
     if (canonical.includes(host) || canonical.includes(bare)) return
     if (c.res.status < 200 || c.res.status > 599) return
-    c.res = responseHeadersApply(c.res, { "X-Robots-Tag": "noindex" })
+    contextResponseReplace(c, responseHeadersApply(c.res, { "X-Robots-Tag": "noindex" }))
   }
 }
