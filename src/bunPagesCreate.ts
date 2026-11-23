@@ -13,8 +13,9 @@ import { staticResponseCreate } from "./static/staticResponseCreate.js"
 
 /**
  * Builds the origin Hono app. Pipeline: health → host redirects → redirect rules
- * → project routes → `staticFirst` static → SSR → static fallback on SSR 404 →
- * `404.html`; header rules and `X-Robots-Tag: noindex` wrap every response.
+ * and static rewrites → project routes → `staticFirst` static → SSR → static
+ * fallback on SSR 404 → `404.html`; header rules and `X-Robots-Tag: noindex`
+ * wrap every response.
  * Without `ssrFetch` the app runs in static-only mode with an optional SPA fallback.
  */
 export function bunPagesCreate(config: BunPagesConfig): Hono {
@@ -32,7 +33,7 @@ export function bunPagesCreate(config: BunPagesConfig): Hono {
   if (config.hostRedirects !== undefined && Object.keys(config.hostRedirects).length > 0) {
     app.use(hostRedirectMiddleware(config.hostRedirects))
   }
-  if (config.redirectRules !== undefined) redirectRulesRegister(app, config.redirectRules)
+  if (config.redirectRules !== undefined) redirectRulesRegister(app, config.redirectRules, clientRoot)
   config.routes?.(app)
 
   app.all("*", async (c) => {
@@ -55,6 +56,7 @@ export function bunPagesCreate(config: BunPagesConfig): Hono {
         const fallback = await staticResponseCreate(clientRoot, url.pathname, url.search, c.req.method)
         if (fallback !== null) return fallback
       }
+      if (config.preserveSsrNotFound) return ssrResponse
     } else if (isStaticMethod) {
       const staticOnly = await staticResponseCreate(clientRoot, url.pathname, url.search, c.req.method)
       if (staticOnly !== null) return staticOnly

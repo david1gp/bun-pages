@@ -12,7 +12,7 @@ browser ──► Cloudflare edge (TLS, WAF, cache, compression)
               ▼ cache miss
          Cloudflare Tunnel ──► Bun on your server
                                  bunPagesCreate(config)
-                                   health → host rules → redirects → routes
+                                   health → host rules → redirects/rewrites → routes
                                    → static → SSR → 404, header rules on every response
 ```
 
@@ -73,7 +73,11 @@ Fallible functions return a [`Result`](https://github.com/david1gp/result) inste
 
 ## Request pipeline
 
-`health → host redirects → redirect rules → project routes → staticFirst static → SSR → static fallback on SSR 404 → 404.html`. Header rules and `X-Robots-Tag: noindex` (on non-canonical hosts) wrap every response, including redirects and 404s. Responses are cloned before headers are set, so immutable headers and `set-cookie` survive.
+`health → host redirects → redirect/rewrite rules → project routes → staticFirst static → SSR → static fallback on SSR 404 → 404.html`. Header rules and `X-Robots-Tag: noindex` (on non-canonical hosts) wrap every response, including redirects and 404s. Responses are cloned before headers are set, so immutable headers and `set-cookie` survive.
+
+Use a rule such as `{ from: "/app/*", to: "/spa", status: 200 }` to serve the static SPA shell at matching `GET`/`HEAD` URLs without redirecting the browser. The original path still determines the response header rules. A real file at that path (including its clean-URL redirect) wins over the rewrite. The target must be a canonical local static path (e.g. `/spa` for `spa.html`); if it cannot be served, processing continues with project routes and the regular static/SSR pipeline, not with another redirect rule.
+
+Set `preserveSsrNotFound: true` to keep the application's SSR 404 response after a static miss, for example when the response is localized.
 
 Without `ssrFetch` the app runs in static-only mode: static files, then `404.html` (status 404), then the optional `spaFallback` (e.g. `/spa.html`, status 200), then a plain-text 404.
 
@@ -99,14 +103,14 @@ Query strings are preserved on `308` redirects. There is no ETag/`304` handling;
 |---|---|
 | `bunPagesCreate(config)` | Builds the Hono app for a `BunPagesConfig` |
 | `bunPagesStart(app)` | `Bun.serve` on `HOST`/`PORT`, logs the address, drains on SIGTERM, returns `Result<Server>` |
-| `BunPagesConfig` | `{ clientRoot, ssrFetch?, buildSha?, canonicalHost?, hostRedirects?, redirectRules?, headerRules?, staticFirst?, routes?, spaFallback? }` |
-| `HttpRedirectRule` | `{ from, to, status?, host? }`; `from` exact or trailing `/*` splat, `to` may contain `:splat`, absolute targets allowed, query preserved |
+| `BunPagesConfig` | `{ clientRoot, ssrFetch?, preserveSsrNotFound?, buildSha?, canonicalHost?, hostRedirects?, redirectRules?, headerRules?, staticFirst?, routes?, spaFallback? }` |
+| `HttpRedirectRule` | `{ from, to, status?, host? }`; `from` exact or one splat (`/old/*`, `/*/`); `to` may contain `:splat`. Redirects allow absolute targets and preserve the query; status `200` serves a local static target in place. |
 | `HttpHeaderRule` | `{ path, headers }`; `path` exact or with `*` wildcards like Pages `_headers` |
 | `headersFileRender(rules)` | Renders rules to Pages `_headers` text (transition/rollback target) |
 | `redirectsFileRender(rules)` | Renders rules to Pages `_redirects` text (host restrictions are dropped) |
 | `headerRuleMatches(pattern, pathname)` | Pages-style `*` path matching |
 | `redirectRuleTargetResolve(rule, hostname, pathname)` | First-match redirect target with `:splat` substituted, or `null` |
-| `redirectRulesRegister(app, rules)` | Registers ordered redirect rules (first match wins) |
+| `redirectRulesRegister(app, rules, clientRoot?)` | Registers ordered rules (first match wins); `clientRoot` enables static 200 rewrites |
 | `headerRulesMiddleware(rules)` | Applies all matching header rules to every response, later rules win |
 | `hostRedirectMiddleware(hostRedirects)` | `www` → apex 301 to `https://<to>` + path + query |
 | `noindexMiddleware(canonicalHost)` | `X-Robots-Tag: noindex` on non-canonical hosts, status/body/cookies kept |

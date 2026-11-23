@@ -7,13 +7,15 @@ export type BunPagesConfig = {
   readonly clientRoot: string
   /** Renders every request that no earlier pipeline step answered. Omit for static-only mode. */
   readonly ssrFetch?: (request: Request) => Response | Promise<Response>
+  /** Keep an SSR 404 after checking for a static file, e.g. if SSR localizes its not-found page. */
+  readonly preserveSsrNotFound?: boolean
   /** Build identifier reported by the health route, e.g. the git sha of the deployed release. */
   readonly buildSha?: string
   /** Host(s) serving the canonical production site; every other host gets `X-Robots-Tag: noindex`. */
   readonly canonicalHost?: string | readonly string[]
   /** `www.example.de` → `example.de`: 301 to `https://<to>` + same path + query. */
   readonly hostRedirects?: Readonly<Record<string, string>>
-  /** Ordered redirect rules, first match wins (e.g. legacy paths, ex-`_redirects`). */
+  /** Ordered redirect and static 200 rewrite rules, first match wins (ex-`_redirects`). */
   readonly redirectRules?: readonly HttpRedirectRule[]
   /** Ordered header rules, all matches apply in order with later rules winning (ex-`_headers`). */
   readonly headerRules?: readonly HttpHeaderRule[]

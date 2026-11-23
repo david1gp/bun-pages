@@ -113,6 +113,50 @@ describe("bunPagesCreate", () => {
     expect(restricted.headers.get("location")).toBe("/y")
   })
 
+  test("serves an ordered 200 rewrite without changing the URL or overriding real files", async () => {
+    const app = bunPagesCreate({
+      clientRoot: clientRootCreate({ "/spa.html": "SPA shell", "/app/help.html": "prerendered help" }),
+      redirectRules: [
+        { from: "/*/", to: "/:splat" },
+        { from: "/app/*", to: "/spa", status: 200 },
+        { from: "/app/deep", to: "/later" },
+      ],
+      headerRules: [{ path: "/app/*", headers: { "X-Robots-Tag": "noindex, follow" } }],
+      ssrFetch: ssrEcho,
+    })
+    const shell = await app.request("/app/deep?x=1")
+    expect(shell.status).toBe(200)
+    expect(shell.headers.get("Location")).toBeNull()
+    expect(shell.headers.get("Content-Type")).toContain("text/html")
+    expect(shell.headers.get("X-Robots-Tag")).toBe("noindex, follow")
+    expect(await shell.text()).toBe("SPA shell")
+    const head = await app.request("/app/deep", { method: "HEAD" })
+    expect(head.status).toBe(200)
+    expect(await head.text()).toBe("")
+    const slash = await app.request("/app/deep/?x=1")
+    expect(slash.status).toBe(301)
+    expect(slash.headers.get("Location")).toBe("/app/deep?x=1")
+    expect(await (await app.request("/app/help")).text()).toBe("prerendered help")
+    expect((await app.request("/app/help.html")).headers.get("Location")).toBe("/app/help")
+    expect(await (await app.request("/app/deep", { method: "POST" })).text()).toBe("ssr /app/deep POST")
+  })
+
+  test("falls through when a rewrite has no canonical local static target", async () => {
+    const app = bunPagesCreate({
+      clientRoot: clientRootCreate({ "/spa.html": "SPA shell" }),
+      redirectRules: [
+        { from: "/remote", to: "https://elsewhere.example/spa", status: 200 },
+        { from: "/noncanonical", to: "/spa.html", status: 200 },
+        { from: "/missing", to: "/other", status: 200 },
+        { from: "/missing", to: "/later" },
+      ],
+      ssrFetch: ssrEcho,
+    })
+    for (const path of ["/remote", "/noncanonical", "/missing"]) {
+      expect(await (await app.request(path)).text()).toBe(`ssr ${path} GET`)
+    }
+  })
+
   test("applies header rules to static, ssr, redirect and 404 responses", async () => {
     const app = bunPagesCreate({
       clientRoot: clientRootCreate({ "/assets/app.js": "console.log(1)", "/404.html": "missing" }),
@@ -183,6 +227,18 @@ describe("bunPagesCreate", () => {
     const missing = await app.request("/missing")
     expect(missing.status).toBe(404)
     expect(await missing.text()).toBe("missing")
+  })
+
+  test("optionally preserves the SSR 404 without skipping the static fallback", async () => {
+    const app = bunPagesCreate({
+      clientRoot: clientRootCreate({ "/late.html": "static-late", "/404.html": "static 404" }),
+      preserveSsrNotFound: true,
+      ssrFetch: () => new Response("localized SSR 404", { status: 404 }),
+    })
+    expect(await (await app.request("/late")).text()).toBe("static-late")
+    const missing = await app.request("/missing")
+    expect(missing.status).toBe(404)
+    expect(await missing.text()).toBe("localized SSR 404")
   })
 
   test("skips static files for non-get/head requests", async () => {

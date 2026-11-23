@@ -16,6 +16,14 @@ describe("redirectRuleTargetResolve", () => {
     expect(redirectRuleTargetResolve(rule, "example.de", "/older/x")).toBeNull()
   })
 
+  test("canonicalizes non-root trailing slashes without producing an external target", () => {
+    const rule = { from: "/*/", to: "/:splat" }
+    expect(redirectRuleTargetResolve(rule, "example.de", "/old/a/b/")).toBe("/old/a/b")
+    expect(redirectRuleTargetResolve(rule, "example.de", "/old/a/b")).toBeNull()
+    expect(redirectRuleTargetResolve(rule, "example.de", "/")).toBeNull()
+    expect(redirectRuleTargetResolve(rule, "example.de", "//outside.example/")).toBeNull()
+  })
+
   test("keeps absolute targets and drops unmatched :splat", () => {
     expect(redirectRuleTargetResolve({ from: "/x", to: "https://other.de/y" }, "example.de", "/x")).toBe(
       "https://other.de/y",
