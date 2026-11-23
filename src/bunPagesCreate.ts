@@ -59,9 +59,21 @@ export function bunPagesCreate(config: BunPagesConfig): Hono {
       if (ssrResponse.status !== 404) return ssrResponse
       if (isStaticMethod) {
         const fallback = await staticResponseCreate(clientRoot, url.pathname, url.search, c.req.method)
-        if (fallback !== null) return applyStaticHeaders(fallback, url.pathname)
+        if (fallback !== null) {
+          try {
+            await ssrResponse.body?.cancel()
+          } catch {
+            // A discarded or locked stream must not prevent serving the fallback.
+          }
+          return applyStaticHeaders(fallback, url.pathname)
+        }
       }
       if (config.preserveSsrNotFound) return ssrResponse
+      try {
+        await ssrResponse.body?.cancel()
+      } catch {
+        // A discarded or locked stream must not prevent serving the fallback.
+      }
     } else if (isStaticMethod) {
       const staticOnly = await staticResponseCreate(clientRoot, url.pathname, url.search, c.req.method)
       if (staticOnly !== null) return applyStaticHeaders(staticOnly, url.pathname)

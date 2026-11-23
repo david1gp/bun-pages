@@ -255,6 +255,44 @@ describe("bunPagesCreate", () => {
     expect(await missing.text()).toBe("missing")
   })
 
+  test("cancels discarded SSR 404 streams but not preserved responses", async () => {
+    let cancelled = 0
+    const app = bunPagesCreate({
+      clientRoot: clientRootCreate({ "/late.html": "static-late", "/404.html": "static 404" }),
+      preserveSsrNotFound: true,
+      ssrFetch: () =>
+        new Response(
+          new ReadableStream({
+            cancel: () => {
+              cancelled++
+            },
+          }),
+          { status: 404 },
+        ),
+    })
+    expect(await (await app.request("/late")).text()).toBe("static-late")
+    expect(cancelled).toBe(1)
+    const preserved = await app.request("/missing")
+    expect(preserved.status).toBe(404)
+    expect(cancelled).toBe(1)
+    await preserved.body?.cancel()
+
+    const fallbackApp = bunPagesCreate({
+      clientRoot: clientRootCreate({ "/404.html": "static 404" }),
+      ssrFetch: () =>
+        new Response(
+          new ReadableStream({
+            cancel: () => {
+              cancelled++
+            },
+          }),
+          { status: 404 },
+        ),
+    })
+    expect(await (await fallbackApp.request("/missing")).text()).toBe("static 404")
+    expect(cancelled).toBe(3)
+  })
+
   test("optionally preserves the SSR 404 without skipping the static fallback", async () => {
     const app = bunPagesCreate({
       clientRoot: clientRootCreate({ "/late.html": "static-late", "/404.html": "static 404" }),
