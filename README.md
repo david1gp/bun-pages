@@ -73,7 +73,7 @@ Fallible functions return a [`Result`](https://github.com/david1gp/result) inste
 
 ## Request pipeline
 
-`health → host redirects → redirect/rewrite rules → project routes → staticFirst static → SSR → static fallback on SSR 404 → 404.html`. Header rules and `X-Robots-Tag: noindex` (on non-canonical hosts) wrap every response, including redirects and 404s. Responses are cloned before headers are set, so immutable headers and `set-cookie` survive.
+`health → host redirects → redirect/rewrite rules → project routes → staticFirst static → SSR → static fallback on SSR 404 → 404.html`. By default, header rules apply only to responses served from `clientRoot`, including static rewrites, static fallbacks and `404.html`; they do not apply to SSR, project routes, or other responses. Rules match the original request path even for rewrites. Set `headerRulesApplyTo: "all"` to restore the previous behavior of applying rules to every response. `X-Robots-Tag: noindex` on non-canonical hosts wraps every response and takes precedence over header rules. Responses are cloned before headers are set, so immutable headers and `set-cookie` survive.
 
 Use a rule such as `{ from: "/app/*", to: "/spa", status: 200 }` to serve the static SPA shell at matching `GET`/`HEAD` URLs without redirecting the browser. The original path still determines the response header rules. A real file at that path (including its clean-URL redirect) wins over the rewrite. The target must be a canonical local static path (e.g. `/spa` for `spa.html`); if it cannot be served, processing continues with project routes and the regular static/SSR pipeline, not with another redirect rule.
 
@@ -103,7 +103,7 @@ Query strings are preserved on `308` redirects. There is no ETag/`304` handling;
 |---|---|
 | `bunPagesCreate(config)` | Builds the Hono app for a `BunPagesConfig` |
 | `bunPagesStart(app)` | `Bun.serve` on `HOST`/`PORT`, logs the address, drains on SIGTERM, returns `Result<Server>` |
-| `BunPagesConfig` | `{ clientRoot, ssrFetch?, preserveSsrNotFound?, buildSha?, canonicalHost?, hostRedirects?, redirectRules?, headerRules?, staticFirst?, routes?, spaFallback? }` |
+| `BunPagesConfig` | `{ clientRoot, ssrFetch?, preserveSsrNotFound?, buildSha?, canonicalHost?, hostRedirects?, redirectRules?, headerRules?, headerRulesApplyTo?, staticFirst?, routes?, spaFallback? }` |
 | `HttpRedirectRule` | `{ from, to, status?, host? }`; `from` exact or one splat (`/old/*`, `/*/`); `to` may contain `:splat`. Redirects allow absolute targets and preserve the query; status `200` serves a local static target in place. |
 | `HttpHeaderRule` | `{ path, headers }`; `path` exact or with `*` wildcards like Pages `_headers` |
 | `headersFileRender(rules)` | Renders rules to Pages `_headers` text (transition/rollback target) |

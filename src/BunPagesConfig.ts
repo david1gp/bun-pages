@@ -19,6 +19,8 @@ export type BunPagesConfig = {
   readonly redirectRules?: readonly HttpRedirectRule[]
   /** Ordered header rules, all matches apply in order with later rules winning (ex-`_headers`). */
   readonly headerRules?: readonly HttpHeaderRule[]
+  /** Apply header rules to static responses only (default), or to all responses for legacy behavior. */
+  readonly headerRulesApplyTo?: "static" | "all"
   /** Path patterns (same `*` syntax as header rules) served from static files before SSR when present. */
   readonly staticFirst?: readonly string[]
   /** Project endpoints (ex-Pages Functions), registered before the static/SSR steps. */

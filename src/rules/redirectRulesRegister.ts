@@ -4,7 +4,12 @@ import type { HttpRedirectRule } from "./HttpRedirectRule.js"
 import { redirectRuleTargetResolve } from "./redirectRuleTargetResolve.js"
 
 /** Registers ordered redirects and, when given a client root, internal static 200 rewrites. */
-export function redirectRulesRegister(app: Hono, rules: readonly HttpRedirectRule[], clientRoot?: string): void {
+export function redirectRulesRegister(
+  app: Hono,
+  rules: readonly HttpRedirectRule[],
+  clientRoot?: string,
+  staticResponseTransform: (response: Response, pathname: string) => Response = (response) => response,
+): void {
   if (rules.length === 0) return
   app.use(async (c, next) => {
     const url = new URL(c.req.url)
@@ -19,9 +24,9 @@ export function redirectRulesRegister(app: Hono, rules: readonly HttpRedirectRul
         }
         // A rewrite is a fallback for this URL; don't hide a real file or its canonical redirect.
         const existing = await staticResponseCreate(clientRoot, url.pathname, url.search, c.req.method)
-        if (existing !== null) return existing
+        if (existing !== null) return staticResponseTransform(existing, url.pathname)
         const rewritten = await staticResponseCreate(clientRoot, target, "", c.req.method)
-        if (rewritten?.status === 200) return rewritten
+        if (rewritten?.status === 200) return staticResponseTransform(rewritten, url.pathname)
         return next()
       }
       const search = url.search

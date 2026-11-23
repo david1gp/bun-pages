@@ -136,7 +136,9 @@ describe("bunPagesCreate", () => {
     const slash = await app.request("/app/deep/?x=1")
     expect(slash.status).toBe(301)
     expect(slash.headers.get("Location")).toBe("/app/deep?x=1")
-    expect(await (await app.request("/app/help")).text()).toBe("prerendered help")
+    const original = await app.request("/app/help")
+    expect(original.headers.get("X-Robots-Tag")).toBe("noindex, follow")
+    expect(await original.text()).toBe("prerendered help")
     expect((await app.request("/app/help.html")).headers.get("Location")).toBe("/app/help")
     expect(await (await app.request("/app/deep", { method: "POST" })).text()).toBe("ssr /app/deep POST")
   })
@@ -157,7 +159,7 @@ describe("bunPagesCreate", () => {
     }
   })
 
-  test("applies header rules to static, ssr, redirect and 404 responses", async () => {
+  test("applies header rules only to static responses by default", async () => {
     const app = bunPagesCreate({
       clientRoot: clientRootCreate({ "/assets/app.js": "console.log(1)", "/404.html": "missing" }),
       canonicalHost: "example.de",
@@ -166,33 +168,54 @@ describe("bunPagesCreate", () => {
         { path: "/assets/*", headers: { "Cache-Control": "public, max-age=31556952, immutable" } },
       ],
       redirectRules: [{ from: "/de", to: "/" }],
+      routes: (routes) => {
+        routes.get("/api", (c) => c.text("route"))
+      },
       ssrFetch: (request) =>
-        new URL(request.url).pathname === "/page" ? ssrEcho(request) : new Response("gone", { status: 404 }),
+        new URL(request.url).pathname === "/page"
+          ? new Response("SSR", { headers: { "Cache-Control": "private, no-store" } })
+          : new Response("gone", { status: 404 }),
     })
     const ssr = await app.request("https://example.de/page")
-    expect(ssr.headers.get("Referrer-Policy")).toBe("no-referrer")
+    expect(ssr.headers.get("Referrer-Policy")).toBeNull()
+    expect(ssr.headers.get("Cache-Control")).toBe("private, no-store")
+    const preview = await app.request("https://preview.example.de/page")
+    expect(preview.headers.get("X-Robots-Tag")).toBe("noindex")
+    expect(preview.headers.get("Referrer-Policy")).toBeNull()
+    expect((await app.request("https://example.de/api")).headers.get("Referrer-Policy")).toBeNull()
+    const staticFile = await app.request("https://example.de/assets/app.js")
+    expect(staticFile.headers.get("Referrer-Policy")).toBe("no-referrer")
+    expect(staticFile.headers.get("Cache-Control")).toBe("public, max-age=31556952, immutable")
     const redirect = await app.request("https://example.de/de")
-    expect(redirect.headers.get("Referrer-Policy")).toBe("no-referrer")
+    expect(redirect.headers.get("Referrer-Policy")).toBeNull()
     const notFound = await app.request("https://example.de/missing")
     expect(notFound.status).toBe(404)
     expect(notFound.headers.get("Referrer-Policy")).toBe("no-referrer")
     expect(await notFound.text()).toBe("missing")
   })
 
-  test("header rules override headers set by ssr", async () => {
+  test("all mode applies header rules to SSR and overrides its headers", async () => {
     const app = bunPagesCreate({
       clientRoot: clientRootCreate({}),
+      headerRulesApplyTo: "all",
       headerRules: [{ path: "/*", headers: { "Cache-Control": "public, max-age=0, must-revalidate" } }],
+      routes: (routes) => {
+        routes.get("/api", (c) => c.text("route"))
+      },
+      redirectRules: [{ from: "/old", to: "/new" }],
       ssrFetch: () => new Response("page", { headers: { "Cache-Control": "private", "X-Ssr": "kept" } }),
     })
     const response = await app.request("https://example.de/page")
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=0, must-revalidate")
     expect(response.headers.get("X-Ssr")).toBe("kept")
+    expect((await app.request("/api")).headers.get("Cache-Control")).toBe("public, max-age=0, must-revalidate")
+    expect((await app.request("/old")).headers.get("Cache-Control")).toBe("public, max-age=0, must-revalidate")
   })
 
   test("later header rules win and noindex wins on non-canonical hosts", async () => {
     const app = bunPagesCreate({
       clientRoot: clientRootCreate({}),
+      headerRulesApplyTo: "all",
       canonicalHost: "example.de",
       headerRules: [
         { path: "/app", headers: { "X-Robots-Tag": "noindex, follow" } },
@@ -210,9 +233,12 @@ describe("bunPagesCreate", () => {
     const app = bunPagesCreate({
       clientRoot: clientRootCreate({ "/.well-known/ai-catalog.json": "static-catalog", "/page.html": "static-page" }),
       staticFirst: ["/.well-known/*"],
+      headerRules: [{ path: "/*", headers: { "Referrer-Policy": "no-referrer" } }],
       ssrFetch: ssrEcho,
     })
-    expect(await (await app.request("/.well-known/ai-catalog.json")).text()).toBe("static-catalog")
+    const staticFirst = await app.request("/.well-known/ai-catalog.json")
+    expect(staticFirst.headers.get("Referrer-Policy")).toBe("no-referrer")
+    expect(await staticFirst.text()).toBe("static-catalog")
     expect(await (await app.request("/page")).text()).toBe("ssr /page GET")
   })
 
