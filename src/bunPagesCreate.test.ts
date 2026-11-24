@@ -293,6 +293,33 @@ describe("bunPagesCreate", () => {
     expect(cancelled).toBe(3)
   })
 
+  test("consumes a preserved SSR 404 stream without cancelling it", async () => {
+    let cancelled = false
+    const app = bunPagesCreate({
+      clientRoot: clientRootCreate({ "/404.html": "static 404" }),
+      preserveSsrNotFound: true,
+      ssrFetch: () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("localized "))
+              controller.enqueue(new TextEncoder().encode("SSR 404"))
+              controller.close()
+            },
+            cancel() {
+              cancelled = true
+            },
+          }),
+          { status: 404, headers: { "Content-Language": "de" } },
+        ),
+    })
+    const response = await app.request("/missing")
+    expect(response.status).toBe(404)
+    expect(response.headers.get("Content-Language")).toBe("de")
+    expect(await response.text()).toBe("localized SSR 404")
+    expect(cancelled).toBe(false)
+  })
+
   test("optionally preserves the SSR 404 without skipping the static fallback", async () => {
     const app = bunPagesCreate({
       clientRoot: clientRootCreate({ "/late.html": "static-late", "/404.html": "static 404" }),

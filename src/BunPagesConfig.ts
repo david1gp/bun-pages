@@ -14,7 +14,11 @@ export type BunPagesConfig = {
     readonly browserCacheControl?: string
     readonly cdnCacheControl?: string
   }
-  /** Keep an SSR 404 after checking for a static file, e.g. if SSR localizes its not-found page. */
+  /**
+   * Return the SSR 404 unchanged after a static-file miss, e.g. for localized not-found pages.
+   * Defaults to false: discard the SSR response and use the normal 404.html/SPA fallback.
+   * A matching static GET/HEAD response always takes precedence.
+   */
   readonly preserveSsrNotFound?: boolean
   /** Build identifier reported by the health route, e.g. the git sha of the deployed release. */
   readonly buildSha?: string
