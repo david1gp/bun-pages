@@ -1,4 +1,4 @@
-import type { Hono } from "hono"
+import type { Context, Hono } from "hono"
 import type { HttpHeaderRule } from "./rules/HttpHeaderRule.js"
 import type { HttpRedirectRule } from "./rules/HttpRedirectRule.js"
 
@@ -7,6 +7,13 @@ export type BunPagesConfig = {
   readonly clientRoot: string
   /** Renders every request that no earlier pipeline step answered. Omit for static-only mode. */
   readonly ssrFetch?: (request: Request) => Response | Promise<Response>
+  /** Opt in to edge caching for eligible public SSR HTML; configure all auth/session cookie names. */
+  readonly ssrEdgeCache?: {
+    readonly authCookieNames: readonly string[]
+    readonly isPublicRequest?: (context: Context) => boolean
+    readonly browserCacheControl?: string
+    readonly cdnCacheControl?: string
+  }
   /** Keep an SSR 404 after checking for a static file, e.g. if SSR localizes its not-found page. */
   readonly preserveSsrNotFound?: boolean
   /** Build identifier reported by the health route, e.g. the git sha of the deployed release. */

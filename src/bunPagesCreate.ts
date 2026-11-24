@@ -11,6 +11,7 @@ import { requestPublicCreate } from "./request/requestPublicCreate.js"
 import { notFoundResponseCreate } from "./static/notFoundResponseCreate.js"
 import { staticFirstMatches } from "./static/staticFirstMatches.js"
 import { staticResponseCreate } from "./static/staticResponseCreate.js"
+import { ssrEdgeCacheApply } from "./ssr/ssrEdgeCacheApply.js"
 
 /**
  * Builds the origin Hono app. Pipeline: health → host redirects → redirect rules
@@ -56,7 +57,9 @@ export function bunPagesCreate(config: BunPagesConfig): Hono {
         console.error("[bun-pages] ssrFetch threw", error)
         return c.text("SSR handler failed", 500)
       }
-      if (ssrResponse.status !== 404) return ssrResponse
+      if (ssrResponse.status !== 404) {
+        return config.ssrEdgeCache ? ssrEdgeCacheApply(ssrResponse, c, config.ssrEdgeCache) : ssrResponse
+      }
       if (isStaticMethod) {
         const fallback = await staticResponseCreate(clientRoot, url.pathname, url.search, c.req.method)
         if (fallback !== null) {

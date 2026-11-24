@@ -79,6 +79,8 @@ Use a rule such as `{ from: "/app/*", to: "/spa", status: 200 }` to serve the st
 
 Set `preserveSsrNotFound: true` to keep the application's SSR 404 response after a static miss, for example when the response is localized.
 
+Opt in to SSR edge caching with `ssrEdgeCache: { authCookieNames: ["session"], isPublicRequest: (c) => !c.req.path.startsWith("/admin") }`. List every auth/session cookie and exclude all private, admin, application, API and server-function paths with the predicate; configure Cloudflare to bypass those cookies as well. Only GET/HEAD 200 HTML SSR responses without `Set-Cookie` or an existing `private`, `no-store` or `no-cache` Cache-Control directive qualify. Other responses remain untouched. Defaults are browser `public, max-age=0, must-revalidate` and CDN `max-age=60, stale-while-revalidate=300, stale-if-error=86400`; override them via `browserCacheControl` and `cdnCacheControl`. Header rules configured for all responses still apply afterwards.
+
 Without `ssrFetch` the app runs in static-only mode: static files, then `404.html` (status 404), then the optional `spaFallback` (e.g. `/spa.html`, status 200), then a plain-text 404.
 
 Every downstream handler sees the request rebuilt on its public `https://<Host>` origin (the tunnel delivers plain http to 127.0.0.1); method, headers (including `CF-Connecting-IP`) and body are kept.
@@ -103,7 +105,7 @@ Query strings are preserved on `308` redirects. There is no ETag/`304` handling;
 |---|---|
 | `bunPagesCreate(config)` | Builds the Hono app for a `BunPagesConfig` |
 | `bunPagesStart(app)` | `Bun.serve` on `HOST`/`PORT`, logs the address, drains on SIGTERM, returns `Result<Server>` |
-| `BunPagesConfig` | `{ clientRoot, ssrFetch?, preserveSsrNotFound?, buildSha?, canonicalHost?, hostRedirects?, redirectRules?, headerRules?, headerRulesApplyTo?, staticFirst?, routes?, spaFallback? }` |
+| `BunPagesConfig` | `{ clientRoot, ssrFetch?, ssrEdgeCache?, preserveSsrNotFound?, buildSha?, canonicalHost?, hostRedirects?, redirectRules?, headerRules?, headerRulesApplyTo?, staticFirst?, routes?, spaFallback? }` |
 | `HttpRedirectRule` | `{ from, to, status?, host? }`; `from` exact or one splat (`/old/*`, `/*/`); `to` may contain `:splat`. Redirects allow absolute targets and preserve the query; status `200` serves a local static target in place. |
 | `HttpHeaderRule` | `{ path, headers }`; `path` exact or with `*` wildcards like Pages `_headers` |
 | `headersFileRender(rules)` | Renders rules to Pages `_headers` text (transition/rollback target) |
