@@ -1,6 +1,6 @@
 {
   "name": "@adaptive-ds/bun-pages",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "scripts": {
     "dev": "bun test --watch",
     "build": "rm -rf ./dist && bun tsc -p ./tsconfig.lib.json",
