@@ -1,1 +1,1 @@
-export const healthRoutePath = "/__origin/health"
+export const healthRoutePath = "/api/health"

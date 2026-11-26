@@ -84,7 +84,7 @@ describe("SSR edge caching", () => {
       routes: (app) => app.get("/route", (c) => c.html("x")),
     })
     expect((await app.request("/route")).headers.get("CDN-Cache-Control")).toBeNull()
-    expect((await app.request("/__origin/health")).headers.get("CDN-Cache-Control")).toBeNull()
+    expect((await app.request("/api/health")).headers.get("CDN-Cache-Control")).toBeNull()
     expect((await app.request("/missing.css")).headers.get("CDN-Cache-Control")).toBe(cdn) // SSR HTML, not a static response
   })
 })

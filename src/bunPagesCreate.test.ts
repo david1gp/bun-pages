@@ -19,10 +19,29 @@ const ssrEcho = (request: Request) => new Response(`ssr ${new URL(request.url).p
 describe("bunPagesCreate", () => {
   test("health route reports ok with the build sha and is never cached", async () => {
     const app = bunPagesCreate({ clientRoot: clientRootCreate({}), buildSha: "abc123", ssrFetch: ssrEcho })
-    const response = await app.request("/__origin/health")
+    const response = await app.request("/api/health")
     expect(response.status).toBe(200)
     expect(response.headers.get("Cache-Control")).toBe("no-store")
     expect(await response.json()).toEqual({ status: "ok", buildSha: "abc123" })
+  })
+
+  test("health wins over app API catch-alls and cache header rules", async () => {
+    const app = bunPagesCreate({
+      clientRoot: clientRootCreate({}),
+      buildSha: "abc123",
+      headerRulesApplyTo: "all",
+      headerRules: [
+        { path: "/*", headers: { "Cache-Control": "public, max-age=60", "CDN-Cache-Control": "max-age=60" } },
+      ],
+      routes: (app) => {
+        app.all("/api/*", (c) => c.text("app route"))
+      },
+    })
+    const health = await app.request("/api/health")
+    expect(await health.json()).toEqual({ status: "ok", buildSha: "abc123" })
+    expect(health.headers.get("Cache-Control")).toBe("no-store")
+    expect(health.headers.get("CDN-Cache-Control")).toBeNull()
+    expect(await (await app.request("/api/other")).text()).toBe("app route")
   })
 
   test("health wins over host redirects", async () => {
@@ -31,7 +50,7 @@ describe("bunPagesCreate", () => {
       hostRedirects: { "www.example.de": "example.de" },
       ssrFetch: ssrEcho,
     })
-    const response = await app.request("https://www.example.de/__origin/health")
+    const response = await app.request("https://www.example.de/api/health")
     expect(response.status).toBe(200)
   })
 

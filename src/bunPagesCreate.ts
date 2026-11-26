@@ -33,8 +33,8 @@ export function bunPagesCreate(config: BunPagesConfig): Hono {
   const headerRules = config.headerRules ?? []
   const applyStaticHeaders = (response: Response, pathname: string): Response =>
     config.headerRulesApplyTo === "all" ? response : headerRulesApply(headerRules, pathname, response)
-  if (config.headerRulesApplyTo === "all") app.use(headerRulesMiddleware(headerRules))
   healthRouteRegister(app, config.buildSha ?? "unknown")
+  if (config.headerRulesApplyTo === "all") app.use(headerRulesMiddleware(headerRules))
   if (config.hostRedirects !== undefined && Object.keys(config.hostRedirects).length > 0) {
     app.use(hostRedirectMiddleware(config.hostRedirects))
   }

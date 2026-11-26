@@ -65,7 +65,7 @@ if (!started.success) {
 ```
 
 ```bash
-curl http://127.0.0.1:3000/__origin/health
+curl http://127.0.0.1:3000/api/health
 # {"status":"ok","buildSha":"3f2c1ab"}
 ```
 
@@ -130,7 +130,7 @@ Query strings are preserved on `308` redirects. There is no ETag/`304` handling;
 | `OriginParityCheckOptions` | Parity input options |
 | `OriginParityDiff` | `{ path, field, a, b }` |
 | `originParityCheckCli(argv)` | CLI: `--a --b --paths-file [--sitemap]`; runnable via `bun` |
-| `healthRoutePath` | `/__origin/health`, used for deploy health checks (`Cache-Control: no-store`) |
+| `healthRoutePath` | `/api/health`, used for deploy health checks (`Cache-Control: no-store`) |
 | `healthRouteRegister(app, buildSha)` | Adds the health route to an existing Hono app |
 
 ## Roadmap
